@@ -5,7 +5,7 @@ TARGET_USER="${1:?Usage: $0 <user> <host>}"
 TARGET_HOST="${2:?Usage: $0 <user> <host>}"
 
 # Fail fast if we cannot SSH with keys (avoids falling back to passwords)
-ssh -o BatchMode=yes "${TARGET_USER}@${TARGET_HOST}" 'echo "SSH ok"' 
+ssh -o BatchMode=yes "${TARGET_USER}@${TARGET_HOST}" 'echo "SSH ok"'
 
 # Run the bootstrap on the target with sudo (will prompt once for sudo if needed)
 ssh -t -o BatchMode=yes "${TARGET_USER}@${TARGET_HOST}" 'bash -s' <<'REMOTE'

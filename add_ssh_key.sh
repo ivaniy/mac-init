@@ -3,7 +3,7 @@ set -euo pipefail
 
 TARGET_USER="${1:?Usage: $0 <user> <host> [<key_name>]}"
 TARGET_HOST="${2:?Usage: $0 <user> <host> [<key_name>]}"
-KEY_NAME="${3:-id_rsa}"
+SSH_KEY_NAME="${3:-id_rsa}"
 
 echo $TARGET_USER
 echo $TARGET_HOST

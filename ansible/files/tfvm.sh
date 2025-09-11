@@ -27,6 +27,7 @@ function tfvm() {
       mkdir -p "$tmp" "$base"
       echo ">> Downloading ${zip}"
       curl -fsSL "$url" -o "${tmp}/${zip}"
+      if [[ "$?" -ne 0 ]]; then echo "Failed to download terraform version ${ver}"; return 1; fi
       echo ">> Downloading & verifying checksums"
       curl -fsSL "$sums" -o "${tmp}/SHA256SUMS"
       (cd "$tmp" && grep " ${zip}\$" SHA256SUMS | shasum -a 256 -c - || {
@@ -43,7 +44,7 @@ function tfvm() {
     use)
       local ver="${1:-}"
       if [[ -z "$ver" ]]; then echo "Usage: tfvm use <x.y.z>"; return 2; fi
-      
+
       if [[ ! -x "${TFVM_DIR}/${ver}/terraform" ]]; then
         echo "Version ${ver} not installed. Try: tfvm install ${ver}"; return 1
       fi

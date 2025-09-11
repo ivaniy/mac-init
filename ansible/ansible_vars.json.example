@@ -5,7 +5,7 @@
    "set_history_config": true,
    "history_size": "10000",
    "history_file_size": "10000",
-   "chome_install": true,
+   "chrome_install": true,
    "terraform_install": true,
    "terraform_version": "1.10.5",
    "terraform_version_manager": true,
@@ -27,7 +27,7 @@
    "sublime_install": true,
    "sublime_build": "4200",
    "homebrew_install": true,
-   "skack_install": true,
+   "slack_install": true,
    "pycharm_install": true,
    "pycharm_version": "2025.2.0.1",
    "zoom_install": true,
@@ -41,7 +41,7 @@
    "aws_cli_install": true,
    "auth0_cli_install": true,
    "kubectl_install": true,
-   "kubectl_version": "v1.33.0",
+   "kubectl_version": "stable",
    "kubectl_version_manager": true,
    "cleanup_installers": false
 }

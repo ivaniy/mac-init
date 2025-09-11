@@ -1,5 +1,5 @@
 function kubvm() {
-  local cmd="${1:-}"; 
+  local cmd="${1:-}"
   shift || true
   local KUBVM_DIR="${HOME}/.kubvm"
   local LINK="/usr/local/bin/kubectl"
@@ -28,6 +28,7 @@ function kubvm() {
       mkdir -p "$tmp" "$base"
       echo ">> Downloading kubectl ${ver}"
       curl -fsSL "$url" -o "${tmp}/kubectl"
+      if [[ "$?" -ne 0 ]]; then echo "Failed to download kubectl version ${ver}"; return 1; fi
       echo ">> Downloading & verifying checksums"
       curl -fsSL "${url}.sha256" -o "${tmp}/kubectl.sha256"
       echo "$(<"${tmp}/kubectl.sha256")  ${tmp}/kubectl" | shasum -a 256 -c - || {
@@ -68,7 +69,7 @@ function kubvm() {
       ;;
 
     remove|uninstall)
-      local ver="${1:-}"; 
+      local ver="${1:-}"
       if [[ -z "$ver" ]]; then echo "Usage: kubvm remove <X.Y.Z|vX.Y.Z>"; return 2; fi
       [[ "$ver" =~ ^v ]] || ver="v$ver"
       rm -rf "${KUBVM_DIR}/${ver}"
