@@ -1,0 +1,1075 @@
+---
+- name: Install core software via official sources (no Brew, except Homebrew itself)
+  hosts: all
+  gather_facts: true
+  # become: yes
+
+  vars:
+    # Adjust versions as you like; terraform is verified by checksum.
+    installers_dir: "/tmp/ansible-installers"
+    user_home: "/Users/{{ ansible_user }}"
+    is_arm64: "{{ ansible_architecture == 'arm64' }}"
+    sudoers_tmp: "/etc/sudoers.d/99-brew-{{ ansible_user | replace('.','') }}-tmp"
+
+    # 1) Configure shell
+    # 2) Chrome (official stable enterprise pkg; URL requires TOS “accept” token)
+    chrome_app_path: "/Applications/Google Chrome.app"
+    chrome_pkg: "googlechrome.pkg"
+    chrome_url: "https://dl.google.com/chrome/mac/stable/accept_tos%3Dhttps%253A%252F%252Fwww.google.com%252Fintl%252Fen_ph%252Fchrome%252Fterms%252F%26_and_accept_tos%3Dhttps%253A%252F%252Fpolicies.google.com%252Fterms/googlechrome.pkg"
+
+    # 3) Terraform
+    tf_arch: "{{ 'arm64' if is_arm64 else 'amd64' }}"
+    tf_zip: "terraform_{{ terraform_version }}_darwin_{{ tf_arch }}.zip"
+    tf_url: "https://releases.hashicorp.com/terraform/{{ terraform_version }}/{{ tf_zip }}"
+    tf_sha_url: "https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_SHA256SUMS"
+
+    # 4) VS Code (official universal ZIP)
+    vscode_app_path: "/Applications/Visual Studio Code.app"
+    vscode_url: "https://update.code.visualstudio.com/latest/darwin-universal/stable"
+    # https://code.visualstudio.com/sha/download?build=stable&os=darwin
+    vscode_zip: "vscode-darwin-universal.zip"
+
+    # 5) Sublime Text (pin a build; update easily later)
+    sublime_app_path: "/Applications/Sublime Text.app"
+    sublime_zip: "sublime_text_build_{{ sublime_build }}_mac.zip"
+    # https://download.sublimetext.com/sublime_text_build_4200_mac.zip
+    sublime_url: "https://download.sublimetext.com/{{ sublime_zip }}"
+
+    # 6) Homebrew
+    brew_prefix: "{{ '/opt/homebrew' if is_arm64 else '/usr/local' }}"
+    brew_bin_dir: "{{ brew_prefix + '/bin' }}"
+    brew_installer_url: "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+
+    # 7) Slack
+    slack_app_path: "/Applications/Slack.app"
+    slack_arch: "{{ 'arm64' if is_arm64 else 'x64' }}"
+    slack_pkg_url: "https://slack.com/api/desktop.latestRelease?arch={{ slack_arch }}&redirect=1&variant=pkg"
+    # https://slack.com/api/desktop.latestRelease?arch=universal&variant=dmg&redirect=true
+    slack_pkg: "Slack-latest.pkg"
+
+    # 8) PyCharm CE (pin a version you want)
+    pycharm_app_path: "/Applications/PyCharm CE.app"
+    pycharm_arch: "{{ '-aarch64' if is_arm64 else '' }}"
+    pycharm_dmg: "pycharm-community-{{ pycharm_version }}{{ pycharm_arch }}.dmg"
+    pycharm_url: "https://download.jetbrains.com/python/{{ pycharm_dmg }}"
+    # https://download-cdn.jetbrains.com/python/pycharm-2025.2.0.1.dmg
+    # https://download.jetbrains.com/python/pycharm-community-2025.2.0.1.dmg
+    pycharm_sha_url: "{{ pycharm_url }}.sha256"
+    # https://download.jetbrains.com/python/pycharm-2025.2.0.1.dmg.sha256
+
+    # 9) Zoom
+    zoom_app_path: "/Applications/zoom.us.app"
+    zoom_pkg_url: "https://zoom.us/client/latest/Zoom.pkg"
+    zoom_pkg: "Zoom-latest.pkg"
+
+    # 10) KeePassXC
+    keepassxc_app_path: "/Applications/KeePassXC.app"
+    keepassxc_arch: "{{ 'arm64' if is_arm64 else 'x86_64' }}"
+    keepassxc_dmg: "KeePassXC-{{ keepassxc_version }}-{{ keepassxc_arch }}.dmg"
+    keepassxc_url: "https://github.com/keepassxreboot/keepassxc/releases/download/{{ keepassxc_version }}/{{ keepassxc_dmg }}"
+    # https://github.com/keepassxreboot/keepassxc/releases/download/2.7.10/KeePassXC-2.7.10-x86_64.dmg
+
+    # 11) Docker Desktop
+    docker_app_path: "/Applications/Docker.app"
+    docker_arch: "{{ 'arm64' if is_arm64 else 'amd64' }}"
+    docker_dmg: "Docker.dmg"
+    docker_dmg_url: "https://desktop.docker.com/mac/main/{{ docker_arch }}/{{ docker_dmg }}"
+    # https://desktop.docker.com/mac/main/amd64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-amd64
+    # https://desktop.docker.com/mac/main/arm64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-arm64
+
+    # 12) Ansible via Brew
+    # 13) jq
+    jq_arch: "{{ 'arm64' if is_arm64 else 'amd64' }}"
+    jq_asset: "jq-macos-{{ jq_arch }}"
+    jq_url: "https://github.com/jqlang/jq/releases/download/jq-{{ jq_version }}/{{ jq_asset }}"
+    # https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-macos-amd64
+    # https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-macos-arm64
+    # https://release-assets.githubusercontent.com/github-production-release-asset/5101141/3971e534-b85d-4439-94c2-aac6235ed31a?sp=r&sv=2018-11-09&sr=b&spr=https&se=2025-08-27T16%3A36%3A41Z&rscd=attachment%3B+filename%3Djq-macos-arm64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2025-08-27T15%3A36%3A39Z&ske=2025-08-27T16%3A36%3A41Z&sks=b&skv=2018-11-09&sig=LUo9Rw8h3%2Be%2FJELyFE2kdDzcCI8yJ2544BhriUR5%2FMg%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc1NjMwOTk2NywibmJmIjoxNzU2MzA5NjY3LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.BustAmt5iX5J5SFYPbT0WW4llywz8tyydQXylR1Us-8&response-content-disposition=attachment%3B%20filename%3Djq-macos-arm64&response-content-type=application%2Foctet-stream
+    # https://release-assets.githubusercontent.com/github-production-release-asset/5101141/6deedbe4-b4a7-484c-bf56-ac1f8a391957?sp=r&sv=2018-11-09&sr=b&spr=https&se=2025-08-27T16%3A31%3A05Z&rscd=attachment%3B+filename%3Djq-macos-amd64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2025-08-27T15%3A30%3A14Z&ske=2025-08-27T16%3A31%3A05Z&sks=b&skv=2018-11-09&sig=D6iUS0lUVBahePODyM%2F0%2BxlDebhSxzw4Xl08fnP5w3E%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc1NjMwOTk2MiwibmJmIjoxNzU2MzA5NjYyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.lqfWx5RDCkozpWMl473TQIUNqDlGpxYmK4Ks703IkrY&response-content-disposition=attachment%3B%20filename%3Djq-macos-amd64&response-content-type=application%2Foctet-stream
+
+    # 14) gcloud CLI
+    gcloud_arch: "{{ 'arm' if is_arm64 else 'x86_64' }}"
+    gcloud_tgz: "google-cloud-cli-darwin-{{ gcloud_arch }}.tar.gz"
+    gcloud_cli_url: "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/{{ gcloud_tgz }}"
+    # https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-x86_64.tar.gz
+    # https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-arm.tar.gz
+    gcloud_home: "{{ user_home }}/google-cloud-sdk"
+
+    # 15) AWS CLI v2
+    awscli_pkg: "AWSCLIV2.pkg"
+    awscli_pkg_url: "https://awscli.amazonaws.com/{{ awscli_pkg }}"
+
+    # 16) Auth0 CLI
+    auth0_arch: "{{ 'arm64' if is_arm64 else 'x86_64' }}"
+    auth0_tgz: "auth0-cli_Darwin_{{ auth0_arch }}.tar.gz"
+    auth0_url: "https://github.com/auth0/auth0-cli/releases/latest/download/{{ auth0_tgz }}"
+
+    # 17) kubectl cli
+    kubectl_arch: "{{ 'arm64' if is_arm64 else 'amd64' }}"
+    # Version to install when using official mode:
+    # use a concrete tag like "v1.30.4" or the literal "stable"
+    # kubectl_version: "v1.33.0" # "stable"
+
+  tasks:
+    #####################################################################
+    # 0) Fetch facts. Prepare environment.
+    #####################################################################
+    - name: Include ansible_vars.json
+      ansible.builtin.include_vars:
+        file: ansible_vars.json
+      tags: always
+
+    - name: Read current login shell
+      when: target_shell is defined
+      ansible.builtin.shell: |
+        dscl . -read /Users/${USER} UserShell | cut -d " " -f2
+      register: login_shell
+      changed_when: false
+      tags: always
+
+    - name: Define target shell bin variable (facts)
+      ansible.builtin.set_fact:
+        dest_login_shell_bin: "{{ target_shell if change_default_shell else login_shell.stdout }}"
+      tags: always
+    - name: Define target shell name variable (facts)
+      ansible.builtin.set_fact:
+        dest_login_shell_name: '{{ {"/bin/bash": "bash", "/bin/zsh": "zsh"}[dest_login_shell_bin] | default("") }}'
+      tags: always
+    - name: Define target shell conf files (facts)
+      ansible.builtin.set_fact:
+        dest_shell_profile: '{{ {"bash": user_home ~ "/.bash_profile"}[dest_login_shell_name] | default("") }}'
+        dest_shell_rc_file: '{{ {"bash": user_home ~ "/.bashrc","zsh": user_home ~ "/.zshrc"}[dest_login_shell_name] | default("") }}'
+      tags: always
+
+    - name: Make installers dir
+      ansible.builtin.file:
+        path: "{{ installers_dir }}"
+        state: directory
+        mode: "0755"
+      tags: always
+
+    - name: Make /usr/local/bin dir
+      ansible.builtin.file:
+        path: /usr/local/bin
+        state: directory
+        mode: "0775"
+        owner: "{{ ansible_user }}"
+        group: admin
+      become: yes
+      tags: always
+
+    - name: Install Rosetta on Apple Silicon
+      when: is_arm64
+      block:
+        - name: Copy Rosetta install script
+          copy:
+            dest: "{{ installers_dir }}/install_rosetta.sh"
+            mode: "0755"
+            content: |
+              {{ lookup('file', 'files/install_rosetta.sh') }}
+
+        - name: Run Rosetta install script
+          command: "{{ installers_dir }}/install_rosetta.sh"
+          register: rosetta_res
+          changed_when: "'Rosetta version' in rosetta_res.stdout"
+      tags: always
+
+    #####################################################################
+    # 1) Configure shell
+    #####################################################################
+    # 1.a) --- Set default login shell (idempotent) ---
+    - name: Set default shell
+      when:
+        - change_default_shell
+        - target_shell is defined
+      block:
+        - name: Ensure target shell is listed in /etc/shells
+          ansible.builtin.lineinfile:
+            path: /etc/shells
+            line: "{{ target_shell }}"
+            state: present
+            create: false
+            insertafter: EOF
+          tags: change_default_shell
+
+        - name: Set {{ ansible_user }} login shell to {{ target_shell }}
+          when: login_shell.stdout is not search(target_shell)
+          ansible.builtin.command: |
+            chsh -s {{ target_shell }} {{ ansible_user }}
+          become: yes
+      tags: change_default_shell
+
+    # 1.b) --- Set .bash_profile config ---
+    - name: Set .bash_profile config
+      when:
+        - set_profile_config
+        - dest_login_shell_name == "bash"
+      block:
+        - name: Create ~/.bash_profile
+          ansible.builtin.file:
+            path: "{{ dest_shell_profile }}"
+            mode: "0644"
+            state: touch
+            modification_time: preserve
+            access_time: preserve
+
+        - name: Check whether ~/.bash_profile already sources ~/.bashrc
+          ansible.builtin.shell: |
+            cat {{ dest_shell_profile }} | grep "\.bashrc"
+          register: has_bashrc
+          changed_when: false
+          failed_when: false
+          tags: set_profile_config
+
+        - name: Update ~/.bash_profile to source ~/.bashrc (if needed)
+          when:
+            - has_bashrc is defined
+            - has_bashrc.rc != 0
+          ansible.builtin.blockinfile:
+            path: "{{ dest_shell_profile }}"
+            marker: "# {mark} ANSIBLE MANAGED BLOCK: source-bashrc"
+            insertafter: EOF
+            mode: "0644"
+            create: yes
+            block: |
+              if [ -f ~/.bashrc ]; then
+                 source ~/.bashrc
+              fi
+      tags: set_profile_config
+
+    # 1.c) --- Set shell history config ---
+    - name: Set shell history config
+      when: set_history_config
+      block:
+        - name: Set shell history file name for zsh
+          when:
+            - dest_login_shell_name == "zsh"
+          ansible.builtin.lineinfile:
+            path: "{{ dest_shell_rc_file }}"
+            create: true
+            line: 'HISTFILE="$HOME/.zsh_history"'
+            state: present
+
+        - name: Set shell history size
+          ansible.builtin.lineinfile:
+            path: "{{ dest_shell_rc_file }}"
+            create: true
+            line: 'export HISTSIZE={{ history_size }}'
+            state: present
+
+        - name: Set shell history file size for bash
+          when: dest_login_shell_name == "bash"
+          ansible.builtin.lineinfile:
+            path: "{{ dest_shell_rc_file }}"
+            create: true
+            line: 'export HISTFILESIZE={{ history_file_size }}'
+            state: present
+
+        - name: Set shell history file size for zsh
+          when: dest_login_shell_name == "zsh"
+          ansible.builtin.lineinfile:
+            path: "{{ dest_shell_rc_file }}"
+            create: true
+            line: 'export SAVEHIST={{ history_file_size }}'
+            state: present
+      tags: set_history_config
+
+    #####################################################################
+    # 2) Google Chrome (official pkg)
+    #####################################################################
+    - name: Install Google Chrome (official pkg)
+      when: chrome_install
+      block:
+        - name: Check if Chrome is present
+          ansible.builtin.stat:
+            path: "{{ chrome_app_path }}"
+          register: chrome_app
+
+        - name: Download Chrome pkg (official)
+          when: not chrome_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ chrome_url | trim }}"
+            dest: "{{ installers_dir }}/{{ chrome_pkg }}"
+            mode: "0644"
+
+        - name: Install Chrome pkg
+          when: not chrome_app.stat.exists
+          ansible.builtin.command:
+            cmd: "/usr/sbin/installer -pkg {{ installers_dir }}/{{ chrome_pkg }} -target /"
+          register: chrome_installed
+          changed_when: "'installer: Package name is Google Chrome' in chrome_installed.stdout or chrome_installed.rc == 0"
+          become: yes
+      tags: chrome_install
+
+    #####################################################################
+    # 3) Terraform (official zip + checksum)
+    #####################################################################
+    - name: Make terraform version manager dir
+      when: terraform_version_manager
+      ansible.builtin.file:
+        path: "{{ user_home }}/.tfvm/"
+        state: directory
+        mode: "0755"
+      tags: terraform_version_manager
+
+    - name: Install Terraform (official zip + checksum)
+      when: terraform_install
+      block:
+        - name: Check if terraform exists
+          ansible.builtin.command: /usr/local/bin/terraform version -json
+          register: tf_ver
+          failed_when: false
+          changed_when: false
+
+        - name: Decide if terraform install/upgrade is needed
+          ansible.builtin.set_fact:
+            tf_need_install: "{{ (tf_ver.rc != 0) or ( (tf_ver.stdout | default('{}') | from_json).terraform_version != terraform_version ) }}"
+          when: tf_ver is defined
+
+        - name: Download Terraform zip
+          when: tf_need_install
+          ansible.builtin.get_url:
+            url: "{{ tf_url }}"
+            dest: "{{ installers_dir }}/{{ tf_zip }}"
+            mode: "0644"
+
+        - name: Download Terraform SHA256SUMS
+          when: tf_need_install
+          ansible.builtin.get_url:
+            url: "{{ tf_sha_url }}"
+            dest: "{{ installers_dir }}/terraform_{{ terraform_version }}_SHA256SUMS"
+            mode: "0644"
+
+        - name: Verify Terraform checksum
+          when: tf_need_install
+          ansible.builtin.shell: |
+            set -e
+            cd "{{ installers_dir }}"
+            grep " {{ tf_zip | regex_escape() }}$" "terraform_{{ terraform_version }}_SHA256SUMS" | shasum -a 256 -c -
+
+        - name: Unpack Terraform
+          when: tf_need_install
+          ansible.builtin.unarchive:
+            src: "{{ installers_dir }}/{{ tf_zip }}"
+            dest: "{{ installers_dir }}"
+            remote_src: true
+            creates: "{{ installers_dir }}/terraform"
+
+        - name: Make terraform {{ terraform_version }} version dir
+          when:
+            - tf_need_install
+            - terraform_version_manager
+          ansible.builtin.file:
+            path: "{{ user_home }}/.tfvm/{{ terraform_version }}"
+            state: directory
+            mode: "0755"
+
+        - name: Copy Terraform to version dir
+          when:
+            - tf_need_install
+            - terraform_version_manager
+          ansible.builtin.copy:
+            src: "{{ installers_dir }}/terraform"
+            dest: "{{ user_home }}/.tfvm/{{ terraform_version }}/terraform"
+            mode: "0755"
+            remote_src: true
+
+        - name: Copy Terraform to /usr/local/bin/
+          when:
+            - tf_need_install
+            - not terraform_version_manager
+          ansible.builtin.copy:
+            src: "{{ installers_dir }}/terraform"
+            dest: "/usr/local/bin/terraform"
+            mode: "0755"
+            remote_src: true
+
+        - name: Create link to terraform version
+          when:
+            - tf_need_install
+            - terraform_version_manager
+          ansible.builtin.file:
+            src: "{{ user_home }}/.tfvm/{{ terraform_version }}/terraform"
+            dest: "/usr/local/bin/terraform"
+            state: link
+      tags: terraform_install
+
+    - name: Install terraform version manager function (tfvm)
+      when: terraform_version_manager
+      ansible.builtin.copy:
+        dest: "{{ user_home }}/.tfvm/tfvm.sh"
+        mode: "0644"
+        content: |
+          {{ lookup('file', 'files/tfvm.sh') }}
+      tags: terraform_version_manager
+
+    - name: Source tfvm from {{ dest_shell_rc_file }}
+      when: terraform_version_manager
+      ansible.builtin.lineinfile:
+        path: "{{ dest_shell_rc_file }}"
+        create: true
+        line: '[[ -r "${HOME}/.tfvm/tfvm.sh" ]] && source "${HOME}/.tfvm/tfvm.sh"'
+        state: present
+      tags: terraform_version_manager
+
+    #####################################################################
+    # 4) Visual Studio Code (official universal ZIP)
+    #####################################################################
+    - name: Check if VS Code is present
+      when: vscode_install or vscode_install_packages
+      ansible.builtin.stat:
+        path: "{{ vscode_app_path }}"
+      register: vscode_app
+      tags:
+        - vscode_install
+        - vscode_install_packages
+
+    - name: Install Visual Studio Code (official universal ZIP)
+      when: vscode_install
+      block:
+        - name: Download VS Code (universal)
+          when: not vscode_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ vscode_url }}"
+            dest: "{{ installers_dir }}/{{ vscode_zip }}"
+            mode: "0644"
+
+        - name: Unzip VS Code into /Applications
+          when: not vscode_app.stat.exists
+          ansible.builtin.unarchive:
+            src: "{{ installers_dir }}/{{ vscode_zip }}"
+            dest: "/Applications"
+            remote_src: true
+      tags: vscode_install
+
+    - name: Install VS Code CLI
+      when: vscode_install or (vscode_install_packages and vscode_app.stat.exists)
+      ansible.builtin.file:
+        src: "{{ vscode_app_path }}/Contents/Resources/app/bin/code"
+        dest: "/usr/local/bin/code"
+        state: link
+      tags:
+        - vscode_install
+        - vscode_install_packages
+
+    - name: Install missed VS Code extensions
+      when:
+        - vscode_install_packages
+        - vscode_packages is defined
+        - (vscode_packages | length) > 0
+      block:
+        - name: List installed VS Code extensions
+          ansible.builtin.command: /usr/local/bin/code --list-extensions
+          register: vscode_ext_installed
+          changed_when: false
+          failed_when: false
+
+        - name: Install VS code plugins
+          ansible.builtin.shell: |
+            /usr/local/bin/code --install-extension {{ item }}
+          loop: "{{ vscode_packages }}"
+          when: "item not in vscode_ext_installed.stdout"
+
+      tags: vscode_install_packages
+        # xargs -n1 -L1 code --install-extension < ./vscode-extensions.txt
+
+    # - name: Remove quarantine from VS Code (if present)
+    #   when: vscode_app.stat.exists or (not vscode_app.stat.exists)
+    #   ansible.builtin.shell: |
+    #     xattr -dr com.apple.quarantine "/Applications/Visual Studio Code.app" || true
+    #   args: { executable: /bin/bash }
+    #   changed_when: false
+
+    #####################################################################
+    # 5) Sublime Text (official zip)
+    #####################################################################
+    - name: Install Sublime Text (official zip)
+      when: sublime_install
+      block:
+        - name: Check if Sublime Text is present
+          ansible.builtin.stat:
+            path: "{{ sublime_app_path }}"
+          register: sublime_app
+
+        - name: Download Sublime Text
+          when: not sublime_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ sublime_url }}"
+            dest: "{{ installers_dir }}/{{ sublime_zip }}"
+            mode: "0644"
+
+        - name: Unzip Sublime Text into /Applications
+          when: not sublime_app.stat.exists
+          ansible.builtin.unarchive:
+            src: "{{ installers_dir }}/{{ sublime_zip }}"
+            dest: "/Applications"
+            remote_src: true
+      tags: sublime_install
+
+    # - name: Remove quarantine from Sublime Text (if present)
+    #   when: sublime_app.stat.exists or (not sublime_app.stat.exists)
+    #   ansible.builtin.shell: |
+    #     xattr -dr com.apple.quarantine "/Applications/Sublime Text.app" || true
+    #   args: { executable: /bin/bash }
+    #   changed_when: false
+
+    # - name: Symlink 'subl' CLI
+    #   ansible.builtin.file:
+    #     src: "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl"
+    #     dest: "/usr/local/bin/subl"
+    #     state: link
+    #     force: true
+
+    #####################################################################
+    # 6) Homebrew (official installer, idempotent)
+    #####################################################################
+    - name: Check for Homebrew
+      when: gcloud_cli_install or auth0_cli_install or ansible_install or homebrew_install
+      ansible.builtin.command: "{{ brew_bin_dir }}/brew --version"
+      register: brew_ver
+      changed_when: false
+      failed_when: false
+      tags:
+        - gcloud_cli_install
+        - auth0_cli_install
+        - ansible_install
+        - homebrew_install
+
+    - name: Install Homebrew (official installer)
+      block:
+        - name: Create temporary sudoers drop-in for NOPASSWD
+          ansible.builtin.copy:
+            dest: "{{ sudoers_tmp }}"
+            owner: root
+            group: wheel
+            mode: "0440"
+            content: "{{ ansible_user }} ALL=(ALL) NOPASSWD: ALL\n"
+            validate: "/usr/sbin/visudo -cf %s"
+          become: yes
+
+        - name: Install Homebrew (official script)
+          ansible.builtin.shell: |
+            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL {{ brew_installer_url }})"
+      always:
+        - name: Remove temporary sudoers drop-in
+          become: yes
+          file:
+            path: "{{ sudoers_tmp }}"
+            state: absent
+      when:
+        - homebrew_install
+        - brew_ver.rc != 0
+
+    - name: Brew (update + upgrade formulae)
+      when:
+        - brew_ver.rc == 0
+        - gcloud_cli_install or auth0_cli_install or ansible_install or homebrew_install
+      community.general.homebrew:
+        update_homebrew: true     # runs `brew update`
+        upgrade_all: true         # runs `brew upgrade` (formulae)
+        path: "{{ brew_bin_dir }}"
+      environment:
+        NONINTERACTIVE: "1"
+
+    - name: Add Homebrew to system PATH via /etc/paths.d (Apple silicon)
+      when:
+        - is_arm64
+        - brew_ver.rc == 0 or gcloud_cli_install or auth0_cli_install or ansible_install or homebrew_install
+      become: yes
+      ansible.builtin.copy:
+        dest: /etc/paths.d/20-homebrew
+        mode: "0644"
+        content: |
+          /opt/homebrew/bin
+          /opt/homebrew/sbin
+      tags:
+        - gcloud_cli_install
+        - auth0_cli_install
+        - ansible_install
+        - homebrew_install
+
+    # - name: Add brew shellenv to target user’s .zprofile
+    #   become_user: "{{ ansible_user }}"
+    #   ansible.builtin.lineinfile:
+    #     path: "{{ user_home }}/.zprofile"
+    #     line: 'eval "$({{ brew_bin_dir }}/brew shellenv)"'
+    #     create: yes
+    #     state: present
+
+    ############################################################
+    # 7) Slack (official PKG)
+    ############################################################
+    - name: Install Slack (official PKG)
+      when: slack_install
+      block:
+        - name: Check Slack.app
+          ansible.builtin.stat:
+            path: "{{ slack_app_path }}"
+          register: slack_app
+
+        - name: Download Slack PKG (official redirect)
+          when: not slack_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ slack_pkg_url }}"
+            dest: "{{ installers_dir }}/{{ slack_pkg }}"
+            mode: "0644"
+
+        - name: Install Slack
+          when: not slack_app.stat.exists
+          become: yes
+          ansible.builtin.command:
+            cmd: "/usr/sbin/installer -pkg {{ installers_dir }}/{{ slack_pkg }} -target /"
+          register: slack_inst
+          changed_when: slack_inst.rc == 0
+      tags: slack_install
+
+    ############################################################
+    # 8) PyCharm Community (DMG; pin version)
+    ############################################################
+    - name: Install PyCharm Community (official DMG)
+      when: pycharm_install
+      block:
+        - name: Check PyCharm CE.app
+          ansible.builtin.stat:
+            path: "{{ pycharm_app_path }}"
+          register: pycharm_app
+
+        - name: Download PyCharm CE DMG
+          when: not pycharm_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ pycharm_url }}"
+            dest: "{{ installers_dir }}/{{ pycharm_dmg }}"
+            mode: "0644"
+
+        - name: Download PyCharm SHA256SUMS
+          when: not pycharm_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ pycharm_sha_url }}"
+            dest: "{{ installers_dir }}/pycharm_{{ pycharm_version }}{{ pycharm_arch }}_SHA256SUMS"
+            mode: "0644"
+
+        - name: Verify PyCharm checksum
+          when: not pycharm_app.stat.exists
+          ansible.builtin.shell: |
+            set -e
+            cd "{{ installers_dir }}"
+            grep "{{ pycharm_dmg }}$" "pycharm_{{ pycharm_version }}{{ pycharm_arch }}_SHA256SUMS" | shasum -a 256 -c -
+
+        - name: Mount PyCharm DMG
+          when: not pycharm_app.stat.exists
+          become: yes
+          ansible.builtin.command: hdiutil attach -nobrowse -readonly -mountpoint /Volumes/PyCharmCE "{{ installers_dir }}/{{ pycharm_dmg }}"
+          args: { creates: /Volumes/PyCharmCE }
+
+        - name: Copy PyCharm to /Applications
+          when: not pycharm_app.stat.exists
+          ansible.builtin.command: cp -R "/Volumes/PyCharmCE/PyCharm CE.app" "/Applications/"
+
+        - name: Unmount PyCharm DMG
+          when: not pycharm_app.stat.exists
+          become: yes
+          ansible.builtin.command: hdiutil detach /Volumes/PyCharmCE
+          register: pycharm_detach
+          changed_when: pycharm_detach.rc == 0
+          failed_when: false
+      tags: pycharm_install
+
+    ############################################################
+    # 9) Zoom (official PKG)
+    ############################################################
+    - name: Install Zoom (official PKG)
+      when: zoom_install
+      block:
+        - name: Check Zoom app
+          ansible.builtin.stat:
+            path: "{{ zoom_app_path }}"
+          register: zoom_app
+
+        - name: Download Zoom PKG
+          when: not zoom_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ zoom_pkg_url }}"
+            dest: "{{ installers_dir }}/{{ zoom_pkg }}"
+            mode: "0644"
+
+        - name: Install Zoom
+          when: not zoom_app.stat.exists
+          become: yes
+          ansible.builtin.command:
+            cmd: "/usr/sbin/installer -pkg {{ installers_dir }}/{{ zoom_pkg }} -target /"
+          register: zoom_inst
+          changed_when: zoom_inst.rc == 0
+      tags: zoom_install
+
+    ############################################################
+    # 10) KeePassXC (official DMG)
+    ############################################################
+    - name: Install KeePassXC (official DMG)
+      when: keepassxc_install
+      block:
+        - name: Check KeePassXC.app
+          ansible.builtin.stat:
+            path: "{{ keepassxc_app_path }}"
+          register: kpxc_app
+
+        - name: Download KeePassXC DMG
+          when: not kpxc_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ keepassxc_url }}"
+            dest: "{{ installers_dir }}/{{ keepassxc_dmg }}"
+            mode: "0644"
+
+        - name: Mount KeePassXC DMG
+          when: not kpxc_app.stat.exists
+          become: yes
+          ansible.builtin.command: hdiutil attach -nobrowse -readonly -mountpoint /Volumes/KeePassXC "{{ installers_dir }}/{{ keepassxc_dmg }}"
+          args: { creates: /Volumes/KeePassXC }
+
+        - name: Copy KeePassXC to /Applications
+          when: not kpxc_app.stat.exists
+          ansible.builtin.command: cp -R "/Volumes/KeePassXC/KeePassXC.app" "/Applications/"
+
+        - name: Unmount KeePassXC DMG
+          when: not kpxc_app.stat.exists
+          become: yes
+          ansible.builtin.command: hdiutil detach /Volumes/KeePassXC
+          failed_when: false
+      tags: keepassxc_install
+
+    ############################################################
+    # 11) Docker Desktop (official DMG)
+    ############################################################
+    - name: Install Docker Desktop (official DMG)
+      when: docker_install
+      block:
+        - name: Check Docker.app
+          ansible.builtin.stat:
+            path: "{{ docker_app_path }}"
+          register: docker_app
+
+        - name: Download Docker Desktop DMG
+          when: not docker_app.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ docker_dmg_url }}"
+            dest: "{{ installers_dir }}/{{ docker_dmg }}"
+            mode: "0644"
+
+        - name: Mount Docker DMG
+          when: not docker_app.stat.exists
+          become: yes
+          ansible.builtin.command: hdiutil attach -nobrowse -readonly -mountpoint /Volumes/Docker "{{ installers_dir }}/{{ docker_dmg }}"
+          args: { creates: /Volumes/Docker }
+
+        - name: Copy Docker to /Applications
+          when: not docker_app.stat.exists
+          ansible.builtin.command: cp -R "/Volumes/Docker/Docker.app" "/Applications/"
+
+        - name: Unmount Docker DMG
+          when: not docker_app.stat.exists
+          become: yes
+          ansible.builtin.command: hdiutil detach /Volumes/Docker
+          failed_when: false
+      tags: docker_install
+
+    ############################################################
+    # 12) Ansible via Brew
+    ############################################################
+    - name: Install Ansible (HomeBrew)
+      when: ansible_install
+      block:
+        - name: Check Ansible
+          ansible.builtin.command: "{{ brew_bin_dir }}/ansible --version"
+          register: ans_ver
+          failed_when: false
+          changed_when: false
+
+        - name: Install latest Ansible via Homebrew
+          when:
+            - brew_ver.rc == 0
+            - ans_ver.rc != 0
+          community.general.homebrew:
+            name: ansible
+            state: present
+            path: "{{ brew_bin_dir }}"
+          environment:
+            NONINTERACTIVE: "1"
+            HOMEBREW_NO_AUTO_UPDATE: "1"
+      tags: ansible_install
+
+    ############################################################
+    # 13) jq (official binary)
+    ############################################################
+    - name: Install jq (official binary)
+      when: jq_install
+      block:
+        - name: Check jq version
+          ansible.builtin.command: /usr/local/bin/jq --version
+          register: jq_ver
+          failed_when: false
+          changed_when: false
+
+        - name: Download jq {{ jq_version }}
+          when: jq_ver.rc != 0 or (jq_ver.stdout | default('')) is not search(jq_version)
+          ansible.builtin.get_url:
+            url: "{{ jq_url }}"
+            dest: "{{ installers_dir }}/jq"
+            mode: "0644"
+
+        - name: Install jq to /usr/local/bin
+          when: jq_ver.rc != 0 or (jq_ver.stdout | default('')) is not search(jq_version)
+          ansible.builtin.copy:
+            src: "{{ installers_dir }}/jq"
+            dest: /usr/local/bin/jq
+            mode: "0755"
+            remote_src: true
+      tags: jq_install
+
+    ############################################################
+    # 14) Google Cloud CLI (official tarball)
+    ############################################################
+    - name: Install Google Cloud CLI (official tarball)
+      when:
+        - gcloud_cli_install
+        - brew_ver.rc == 0
+      block:
+        - name: Check gcloud
+          ansible.builtin.command: "{{gcloud_home}}/bin/gcloud --version"
+          register: gcloud_ver
+          failed_when: false
+          changed_when: false
+
+        ## Prerequisites: GNU tar (gtar)
+        - name: Ensure gnu-tar (gtar) is installed (HomeBrew)
+          when: gcloud_ver.rc != 0
+          community.general.homebrew:
+            name: gnu-tar
+            state: present
+            path: "{{ brew_bin_dir }}"
+          environment:
+            NONINTERACTIVE: "1"
+            HOMEBREW_NO_AUTO_UPDATE: "1"
+
+        - name: Download gcloud CLI (tar.gz)
+          when: gcloud_ver.rc != 0
+          ansible.builtin.get_url:
+            url: "{{ gcloud_cli_url }}"
+            dest: "{{ installers_dir }}/{{ gcloud_tgz }}"
+            mode: "0644"
+
+        - name: Extract gcloud CLI
+          when: gcloud_ver.rc != 0
+          ansible.builtin.unarchive:
+            src: "{{ installers_dir }}/{{ gcloud_tgz }}" # "{{ gcloud_cli_url }}" # "{{ installers_dir }}/{{ gcloud_tgz }}"
+            dest: "{{ user_home }}"
+            remote_src: true
+            creates: "{{ gcloud_home }}/install.sh"
+          environment:
+            PATH: "{{ brew_bin_dir }}:{{ ansible_env.PATH }}"
+
+        - name: Silent install gcloud
+          when: gcloud_ver.rc != 0
+          ansible.builtin.shell: |
+            CLOUDSDK_CORE_DISABLE_PROMPTS=1 "{{ gcloud_home }}/install.sh" --quiet --install-python false --path-update True
+      tags: gcloud_cli_install
+
+    # - name: Symlink gcloud into /usr/local/bin
+    #   become: yes
+    #   when: gcloud_ver.rc != 0
+    #   ansible.builtin.file:
+    #     src: "{{ gcloud_home }}/bin/gcloud"
+    #     dest: /usr/local/bin/gcloud
+    #     state: link
+    #     force: true
+
+    ############################################################
+    # 15) AWS CLI v2 (official PKG)
+    ############################################################
+    - name: Install AWS CLI v2 (official)
+      when:
+        - aws_cli_install
+      block:
+        - name: Check aws
+          ansible.builtin.command: /usr/local/bin/aws --version
+          register: aws_ver
+          failed_when: false
+          changed_when: false
+
+        - name: Download AWS CLI v2 PKG
+          when: aws_ver.rc != 0
+          ansible.builtin.get_url:
+            url: "{{ awscli_pkg_url }}"
+            dest: "{{ installers_dir }}/{{ awscli_pkg }}"
+            mode: "0644"
+
+        - name: Install AWS CLI v2
+          when: aws_ver.rc != 0
+          become: yes
+          ansible.builtin.command:
+            cmd: "/usr/sbin/installer -pkg {{ installers_dir }}/{{ awscli_pkg }} -target /"
+          register: aws_inst
+          changed_when: aws_inst.rc == 0
+      tags: aws_cli_install
+
+    ############################################################
+    # 16) Auth0 CLI (HomeBrew)
+    ############################################################
+    - name: Install Auth0 CLI (HomeBrew)
+      when:
+        - auth0_cli_install
+        - brew_ver.rc == 0
+      block:
+        - name: Check auth0
+          ansible.builtin.command: "{{ brew_bin_dir }}/auth0 --version"
+          register: auth0_ver
+          failed_when: false
+          changed_when: false
+
+        # Auth0 CLI (official tap)
+        - name: Ensure auth0/auth0-cli tap is present
+          when: auth0_ver.rc != 0
+          community.general.homebrew_tap:
+            name: auth0/auth0-cli
+            state: present
+            path: "{{ brew_bin_dir }}"
+          environment:
+            NONINTERACTIVE: "1"
+            HOMEBREW_NO_AUTO_UPDATE: "1"
+
+        - name: Install Auth0 CLI
+          when: auth0_ver.rc != 0
+          community.general.homebrew:
+            name: auth0
+            state: present
+            path: "{{ brew_bin_dir }}"
+          environment:
+            NONINTERACTIVE: "1"
+            HOMEBREW_NO_AUTO_UPDATE: "1"
+      tags: auth0_cli_install
+
+    ############################################################
+    # 17) Kubectl CLI (official + checksum)
+    ############################################################
+    - name: Make kubectl version manager dir
+      when: kubectl_version_manager
+      ansible.builtin.file:
+        path: "{{ user_home }}/.kubvm/"
+        state: directory
+        mode: "0755"
+      tags: kubectl_version_manager
+
+    - name: Install  Kubectl CLI (official)
+      when: kubectl_install
+      block:
+        # Check current kubectl
+        - name: Check existing kubectl version
+          ansible.builtin.command: "/usr/local/bin/kubectl version --client -o json"
+          register: kubectl_ver
+          failed_when: false
+          changed_when: false
+
+        # Resolve version if "stable" is requested
+        - name: Resolve latest stable kubectl version
+          when: kubectl_version == "stable"
+          ansible.builtin.uri:
+            url: "https://dl.k8s.io/release/stable.txt"
+            return_content: true
+          register: kubectl_stable
+
+        - name: Choose kubectl version
+          ansible.builtin.set_fact:
+            chosen_kubectl_version: "{{ kubectl_stable.content | trim if (kubectl_version == 'stable') else kubectl_version }}"
+
+        - name: Decide if kubectl needs install/upgrade
+          ansible.builtin.set_fact:
+            kubectl_need_install: "{{ kubectl_ver.rc != 0 or ( (kubectl_ver.stdout | default('{}') | from_json).clientVersion.gitVersion != chosen_kubectl_version ) }}"
+          when: kubectl_ver is defined
+
+        - name: Build kubectl URLs (official)
+          when: kubectl_need_install
+          ansible.builtin.set_fact:
+            kubectl_url: "https://dl.k8s.io/release/{{ chosen_kubectl_version }}/bin/darwin/{{ kubectl_arch }}/kubectl"
+            kubectl_sha_url: "https://dl.k8s.io/release/{{ chosen_kubectl_version }}/bin/darwin/{{ kubectl_arch }}/kubectl.sha256"
+            kubectl_bin: "kubectl-{{ chosen_kubectl_version }}-{{ kubectl_arch }}"
+
+        # Fetch checksum and binary (verify with sha256)
+        - name: Fetch kubectl sha256
+          when: kubectl_need_install
+          ansible.builtin.uri:
+            url: "{{ kubectl_sha_url }}"
+            return_content: true
+          register: kubectl_sha
+
+        - name: Download kubectl (official, verified)
+          when: kubectl_need_install
+          ansible.builtin.get_url:
+            url: "{{ kubectl_url }}"
+            dest: "{{ installers_dir }}/{{ kubectl_bin }}"
+            mode: "0755"
+            checksum: "sha256:{{ kubectl_sha.content | trim }}"
+
+        - name: Make kubectl {{ chosen_kubectl_version }} version dir
+          when:
+            - kubectl_need_install
+            - kubectl_version_manager
+          ansible.builtin.file:
+            path: "{{ user_home }}/.kubvm/{{ chosen_kubectl_version }}"
+            state: directory
+            mode: "0755"
+
+        - name: Copy kubectl to version dir
+          when:
+            - kubectl_need_install
+            - kubectl_version_manager
+          ansible.builtin.copy:
+            src: "{{ installers_dir }}/{{ kubectl_bin }}"
+            dest: "{{ user_home }}/.kubvm/{{ chosen_kubectl_version }}/kubectl"
+            mode: "0755"
+            remote_src: true
+
+        - name: Copy kubectl to /usr/local/bin/
+          when:
+            - kubectl_need_install
+            - not kubectl_version_manager
+          ansible.builtin.copy:
+            src: "{{ installers_dir }}/{{ kubectl_bin }}"
+            dest: "/usr/local/bin/kubectl"
+            mode: "0755"
+            remote_src: true
+
+        - name: Create link to kubectl {{ chosen_kubectl_version }} version dir
+          when:
+            - kubectl_need_install
+            - kubectl_version_manager
+          ansible.builtin.file:
+            src: "{{ user_home }}/.kubvm/{{ chosen_kubectl_version }}/kubectl"
+            dest: "/usr/local/bin/kubectl"
+            state: link
+      tags: kubectl_install
+
+    - name: Install kubectl version manager function (kubvm)
+      when: kubectl_version_manager
+      ansible.builtin.copy:
+        dest: "{{ user_home }}/.kubvm/kubvm.sh"
+        mode: "0644"
+        content: |
+          {{ lookup('file', 'files/kubvm.sh') }}
+      tags: kubectl_version_manager
+
+    - name: Source kubvm from .bashrc
+      when: kubectl_version_manager
+      ansible.builtin.lineinfile:
+        path: "{{ dest_shell_rc_file }}"
+        create: true
+        line: '[[ -r "${HOME}/.kubvm/kubvm.sh" ]] && source "${HOME}/.kubvm/kubvm.sh"'
+        state: present
+      tags: kubectl_version_manager
+
+    ############################################################
+    # 99) Cleanup installers
+    ############################################################
+    - name: Cleanup installers
+      when: cleanup_installers
+      ansible.builtin.file:
+        path: "{{ installers_dir }}"
+        state: absent
+      tags: cleanup_installers
