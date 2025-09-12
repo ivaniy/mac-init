@@ -19,6 +19,7 @@ it tested on MacOS versions: `MacOS Monterey 12.7.4` and `MacOS Sonoma 14.7.7`
 4. Run CLT installer `./clt_install_remote.sh <ssh_user> <macbook_address>`
 
 ### 3. Apply ansible playbook
+More detailed ansible documentation you can find in [Ansible playbook docs](./ansible/README.md)
 To run ansible playbook from external control machine:
 1. Ensure you have ansible: `ansible --version`
 2. Go to ansible folder `cd ansible`
