@@ -1,15 +1,16 @@
-###### DISCLAIMER: This is an unofficial personal project. No warranty is provided. <br />Author: Ivan Dolyuk with the support of ChatGPT 5
+###### DISCLAIMER:<br />This is an unofficial personal project. No warranty is provided.<br />Author: Ivan Dolyuk with the support of ChatGPT 5
 
 # mac-init for DevOps
 
-This repo designet to quick idempotent MacBook setup for my needs as a DevOps Engineer. It require only three simple steps to configure new environment on MacOS to start working on daily tasks.
+I hate Homebrew because it often fails or takes too long, so I built my own Ansible playbook to provision a MacBook quickly using official installers wherever possible. This repo helps me spin up fresh macOS environment for my daily DevOps tasks.<br />
+It requires just three simple steps to configure a new environment on macOS and start working.
 
 ### 1. SSH setup on New MacOS side 
 Just open terminal and run:
 ```
 sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ivaniy/mac-init/HEAD/enable_ssh.sh)"
 ```
-It enables SSH Server on MacOs side to be able to configure it via SSH with or without ansible
+It enables SSH Server on MacOs side to be able to configure it via SSH with or without ansible<br />
 it tested on MacOS versions: `MacOS Monterey 12.7.4` and `MacOS Sonoma 14.7.7`
 
 ### 2. Install Command Line Tools (from another machine)
@@ -19,7 +20,7 @@ it tested on MacOS versions: `MacOS Monterey 12.7.4` and `MacOS Sonoma 14.7.7`
 4. Run CLT installer `./clt_install_remote.sh <ssh_user> <macbook_address>`
 
 ### 3. Apply ansible playbook
-More detailed ansible documentation you can find in [Ansible playbook docs](./ansible/README.md)
+More detailed ansible documentation you can find in [Ansible playbook docs](./ansible/README.md)<br />
 To run ansible playbook from external control machine:
 1. Ensure you have ansible: `ansible --version`
 2. Go to ansible folder `cd ansible`
@@ -44,8 +45,8 @@ ansible-playbook --connection=local --inventory "localhost," install_software.ym
 ```
 
 ### Tested on:
-macOS Ventura 13.7.8 (Intel Core i7) - AWS MacMini Instance
-macOS Sequoia 15.6.1 (Intel Core i7) - MacBook
+macOS Ventura 13.7.8 (Intel Core i7) - AWS MacMini Instance<br />
+macOS Sequoia 15.6.1 (Intel Core i7) - MacBook<br />
 macOS Sequoia 15.6.1 (Apple M2) - AWS MacMini Instance
 
 ### Post Deploy steps
