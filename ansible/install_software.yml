@@ -98,6 +98,9 @@
     # 15) AWS CLI v2
     awscli_pkg: "AWSCLIV2.pkg"
     awscli_pkg_url: "https://awscli.amazonaws.com/{{ awscli_pkg }}"
+    awscli_ssm_plugin_arch: "{{ 'mac_arm64' if is_arm64 else 'mac' }}"
+    awscli_ssm_plugin_pkg: "session-manager-plugin.pkg"
+    awscli_ssm_plugin_pkg_url: "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/{{ awscli_ssm_plugin_arch }}/{{ aws_cli_ssm_plugin_pkg }}"
 
     # 16) Auth0 CLI
     auth0_arch: "{{ 'arm64' if is_arm64 else 'x86_64' }}"
@@ -884,31 +887,73 @@
     ############################################################
     # 15) AWS CLI v2 (official PKG)
     ############################################################
-    - name: Install AWS CLI v2 (official)
+    - name: Check AWS CLI
       when:
         - aws_cli_install
-      block:
-        - name: Check aws
-          ansible.builtin.command: /usr/local/bin/aws --version
-          register: aws_ver
-          failed_when: false
-          changed_when: false
+        - aws_cli_sm_plugin_install
+      ansible.builtin.command: /usr/local/bin/aws --version
+      register: aws_ver
+      failed_when: false
+      changed_when: false
+      tags:
+        - aws_cli_install
+        - aws_cli_sm_plugin_install
 
+    - name: Install AWS CLI v2 (official)
+      when:
+        - aws_cli_install and aws_ver.rc != 0
+        - aws_cli_sm_plugin_install and aws_ver.rc != 0
+      block:
         - name: Download AWS CLI v2 PKG
-          when: aws_ver.rc != 0
           ansible.builtin.get_url:
             url: "{{ awscli_pkg_url }}"
             dest: "{{ installers_dir }}/{{ awscli_pkg }}"
             mode: "0644"
 
         - name: Install AWS CLI v2
-          when: aws_ver.rc != 0
           become: yes
           ansible.builtin.command:
             cmd: "/usr/sbin/installer -pkg {{ installers_dir }}/{{ awscli_pkg }} -target /"
           register: aws_inst
           changed_when: aws_inst.rc == 0
-      tags: aws_cli_install
+      tags:
+        - aws_cli_install
+        - aws_cli_sm_plugin_install
+
+    ############################################################
+    # 15.a) AWS CLI Session Manager Plugin (official PKG)
+    ############################################################
+    - name: Install AWS CLI Session Manager Plugin (official)
+      when:
+        - aws_cli_sm_plugin_install
+      block:
+        - name: Check if AWS CLI Session Manager Plugin is present
+          ansible.builtin.stat:
+            path: "/usr/local/bin/session-manager-plugin"
+          register: aws_cli_sm_plugin_bin
+
+        - name: Download AWS CLI Session Manager Plugin PKG
+          when: not aws_cli_sm_plugin_bin.stat.exists
+          ansible.builtin.get_url:
+            url: "{{ awscli_ssm_plugin_pkg_url }}"
+            dest: "{{ installers_dir }}/{{ awscli_ssm_plugin_pkg }}"
+            mode: "0644"
+
+        - name: Install AWS CLI Session Manager Plugin
+          when: not aws_cli_sm_plugin_bin.stat.exists
+          become: yes
+          ansible.builtin.command:
+            cmd: "/usr/sbin/installer -pkg {{ installers_dir }}/{{ awscli_ssm_plugin_pkg }} -target /"
+          register: aws_sm_inst
+          changed_when: aws_sm_inst.rc == 0
+
+        - name: Create link to session-manager-plugin
+          when: not aws_cli_sm_plugin_bin.stat.exists
+          ansible.builtin.file:
+            src: "/usr/local/sessionmanagerplugin/bin/session-manager-plugin"
+            dest: "/usr/local/bin/session-manager-plugin"
+            state: link
+      tags: aws_cli_sm_plugin_install
 
     ############################################################
     # 16) Auth0 CLI (HomeBrew)

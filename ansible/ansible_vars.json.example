@@ -39,6 +39,7 @@
    "jq_version": "1.8.1",
    "gcloud_cli_install": true,
    "aws_cli_install": true,
+   "aws_cli_sm_plugin_install": true,
    "auth0_cli_install": true,
    "kubectl_install": true,
    "kubectl_version": "stable",

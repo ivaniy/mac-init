@@ -15,7 +15,6 @@ It’s designed to be **idempotent** and safe to re-run.
 * [Tags](#tags)
 * [Apple silicon notes (Rosetta & PATH)](#apple-silicon-notes-rosetta--path)
 * [Terraform & kubectl Version Managers](#terraform--kubectl-version-managers)
-* [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -45,7 +44,7 @@ It’s designed to be **idempotent** and safe to re-run.
   * kubectl (official binary + checksum; optional **kubvm** helper)
   * jq (official release binary)
   * Google Cloud SDK (official tarball; silent install) (require Homebrew for GNU tar)
-  * AWS CLI v2 (official pkg)
+  * AWS CLI v2 (official pkg) + AWS CLI Session Manager Plugin
   * Auth0 CLI (via Homebrew)
   * Ansible (via Homebrew)
 
@@ -122,20 +121,21 @@ Put your desired values in **`ansible_vars.json`**. Below are the most important
 
 ### CLI toggles
 
-| Variable                    | Type   | Default                   | Meaning                            |
-| --------------------------- | ------ | ------------------------- | ---------------------------------- |
-| `terraform_install`         | bool   | `true`                    | Install Terraform.                 |
-| `terraform_version`         | string | (set in vars)             | Version like `1.10.5`.             |
-| `terraform_version_manager` | bool   | `true`                    | Use **tfvm** helper and symlink.   |
-| `kubectl_install`           | bool   | `true`                    | Install kubectl (official binary). |
-| `kubectl_version`           | string | `stable`                  | Version like`1.33.0` or `stable`   |
-| `kubectl_version_manager`   | bool   | `true`                    | Use **kubvm** helper and symlink.  |
-| `jq_install`                | bool   | `true`                    | Install jq (official binary).      |
-| `jq_version`                | string | `1.8.1`                   | jq version to install.             |
-| `gcloud_cli_install`        | bool   | `true`                    | Install Google Cloud SDK.          |
-| `aws_cli_install`           | bool   | `true`                    | Install AWS CLI v2 (pkg).          |
-| `auth0_cli_install`         | bool   | `true`                    | Install Auth0 CLI via Homebrew.    |
-| `ansible_install`           | bool   | `true`                    | Install Ansible via Homebrew.      |
+| Variable                    | Type   | Default                   | Meaning                                      |
+| --------------------------- | ------ | ------------------------- | -------------------------------------------- |
+| `terraform_install`         | bool   | `true`                    | Install Terraform.                           |
+| `terraform_version`         | string | (set in vars)             | Version like `1.10.5`.                       |
+| `terraform_version_manager` | bool   | `true`                    | Use **tfvm** helper and symlink.             |
+| `kubectl_install`           | bool   | `true`                    | Install kubectl (official binary).           |
+| `kubectl_version`           | string | `stable`                  | Version like`1.33.0` or `stable`             |
+| `kubectl_version_manager`   | bool   | `true`                    | Use **kubvm** helper and symlink.            |
+| `jq_install`                | bool   | `true`                    | Install jq (official binary).                |
+| `jq_version`                | string | `1.8.1`                   | jq version to install.                       |
+| `gcloud_cli_install`        | bool   | `true`                    | Install Google Cloud SDK.                    |
+| `aws_cli_install`           | bool   | `true`                    | Install AWS CLI v2 (pkg).                    |
+| `aws_cli_sm_plugin_install` | bool   | `true`                    | Install AWS CLI Session manager plugin(pkg). |
+| `auth0_cli_install`         | bool   | `true`                    | Install Auth0 CLI via Homebrew.              |
+| `ansible_install`           | bool   | `true`                    | Install Ansible via Homebrew.                |
 
 ### Homebrew & housekeeping
 
@@ -173,6 +173,7 @@ Use tags to run only parts of the play:
 | `jq_install`                | Installs jq.                                                    |
 | `gcloud_cli_install`        | Installs Google Cloud SDK.                                      |
 | `aws_cli_install`           | Installs AWS CLI v2.                                            |
+| `aws_cli_sm_plugin_install` | Installs AWS CLI Session Manager Plugin.                        |
 | `auth0_cli_install`         | Installs Auth0 CLI via Homebrew.                                |
 | `kubectl_install`           | Installs kubectl.                                               |
 | `kubectl_version_manager`   | Installs `kubvm.sh` and sources it.                             |
@@ -186,6 +187,7 @@ Use tags to run only parts of the play:
 * `homebrew_install`: Skip `brew update` and `brew upgrade`. Don't reinstall if exist
 * `zoom_install`: Rosetta required on Apple Silicon
 * `aws_cli_install`: Rosetta required on Apple Silicon
+* `aws_cli_sm_plugin_install`: Requires AWS CLI. If missed it force install AWS CLI
 * `keepassxc_install`: Doesn't start on Screen Sharing. Require `--allow-screencapture`
 * `terraform_install`: If enabled `terraform_version_manager` places versions under `~/.tfvm/<ver>` and symlinks `/usr/local/bin/terraform`.  Else places as `/usr/local/bin/terraform`
 * `kubectl_install`: `kubectl_version_manager`  places versions under `~/.kubvm/<ver>` and symlinks `/usr/local/bin/kubectl`. Else places as `/usr/local/bin/kubectl`
